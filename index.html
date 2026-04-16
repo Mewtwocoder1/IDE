@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>iPad Web IDE</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * { box-sizing: border-box; }
+        body, html { margin: 0; height: 100%; overflow: hidden; background: #1e1e1e; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        
+        #ide-container { display: grid; grid-template-columns: 200px 1fr 1fr; height: 100vh; color: #ccc; }
+
+        /* Sidebar */
+        #sidebar { background: #181818; border-right: 1px solid #333; display: flex; flex-direction: column; overflow: hidden; }
+        .controls { padding: 8px; display: flex; gap: 4px; background: #252526; border-bottom: 1px solid #333; }
+        #file-list { flex-grow: 1; overflow-y: auto; padding: 5px; font-size: 12px; }
+
+        /* Tree Styles */
+        .tree-item { margin-left: 10px; }
+        .folder-header { cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 4px; border-radius: 3px; }
+        .folder-header:hover { background: #2a2d2e; }
+        .folder-content { display: none; border-left: 1px solid #333; margin-left: 5px; }
+        .folder-content.expanded { display: block; }
+        .file-item { cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 3px; color: #9cdcfe; white-space: nowrap; }
+        .file-item:hover { background: #2a2d2e; }
+        .active-file { background: #37373d !important; color: #fff; }
+        .fa-chevron-right { font-size: 8px; transition: transform 0.2s; }
+        .fa-folder { color: #dcb67a; }
+
+        /* Main Workspace */
+        #workspace { display: flex; flex-direction: column; border-right: 1px solid #333; }
+        #monaco-editor { flex-grow: 1; }
+
+        /* Terminal */
+        #bottom-panel { height: 180px; background: #000; border-top: 2px solid #333; display: flex; flex-direction: column; }
+        #console-output { flex-grow: 1; overflow-y: auto; padding: 8px; font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size: 11px; white-space: pre-wrap; color: #ddd; }
+        #terminal-input-row { display: flex; background: #111; padding: 4px 8px; align-items: center; gap: 8px; }
+        #terminal-input { background: transparent; border: none; color: #0f0; outline: none; flex-grow: 1; font-family: inherit; font-size: 11px; }
+
+        /* Preview */
+        #preview-container { background: #fff; position: relative; }
+        iframe { width: 100%; height: 100%; border: none; }
+
+        button { background: #3c3c3c; color: white; border: none; padding: 4px 8px; cursor: pointer; border-radius: 2px; font-size: 11px; }
+        button:hover { background: #4caf50; }
+    </style>
+</head>
+<body>
+
+<div id="ide-container">
+    <aside id="sidebar">
+        <div class="controls">
+            <button onclick="handleNewFile()"><i class="fas fa-file-plus"></i> + File</button>
+    <button onclick="importStarterTemplate()"><i class="fas fa-bolt"></i> Starter</button>
+        </div>
+        <div id="file-list"></div>
+    </aside>
+
+    <div id="workspace">
+        <div id="monaco-editor"></div>
+        <div id="bottom-panel">
+            <div id="console-output"></div>
+            <div id="terminal-input-row">
+                <span style="color: #888;">$</span>
+                <input type="text" id="terminal-input" placeholder="npm install <pkg>...">
+            </div>
+        </div>
+    </div>
+
+    <section id="preview-container">
+        <iframe id="preview-frame" sandbox="allow-scripts allow-same-origin"></iframe>
+    </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/loader.min.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
