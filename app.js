@@ -3,7 +3,6 @@ import { openDB } from 'https://esm.sh/idb@8.0.0';
 
 /**
  * 1. DYNAMIC SERVICE WORKER REGISTRATION
- * Adjusts for GitHub Pages subfolders automatically.
  */
 if ('serviceWorker' in navigator) {
     const isGitHubPages = window.location.hostname.includes('github.io');
@@ -32,7 +31,6 @@ const termInput = document.getElementById('terminal-input');
 function appendToConsole(text, color = '#ddd') {
     const entry = document.createElement('div');
     entry.style.color = color;
-    // Strip Vite's ANSI color codes for cleaner display
     const cleanText = text.replace(/\x1B\[[0-9;]*[mK]/g, '');
     entry.textContent = cleanText.startsWith('>') ? cleanText : `> ${cleanText}`;
     consoleOutput.appendChild(entry);
@@ -43,35 +41,91 @@ container.on('stdout', data => appendToConsole(data, '#bbb'));
 container.on('stderr', data => appendToConsole(data, '#ff5555'));
 
 /**
- * 3. VITE DEV SERVER & NPM LOGIC
+ * 3. TERMINAL COMMAND ENGINE
+ */
+async function runCommand(cmdString) {
+    const input = cmdString.trim();
+    if (!input) return;
+
+    appendToConsole(`$ ${input}`, '#00aaff');
+    const args = input.split(/\s+/);
+    const command = args.shift();
+
+    try {
+        if (command === 'npm') {
+            const action = args.shift();
+            const pkgName = args[0];
+
+            if (action === 'install' || action === 'i') {
+                if (pkgName) {
+                    appendToConsole(`Installing ${pkgName}...`, "yellow");
+                    await container.npm.install(pkgName);
+                } else {
+                    appendToConsole("Installing dependencies from package.json...", "yellow");
+                    await container.npm.install();
+                }
+                renderSidebar();
+                appendToConsole("NPM Install Complete", "#0f0");
+            } 
+            else if (action === 'uninstall') {
+                appendToConsole(`Removing ${pkgName}...`, "orange");
+                await container.npm.uninstall(pkgName);
+                renderSidebar();
+            }
+            else if (action === 'list' || action === 'ls') {
+                const modules = vfs.readdirSync('/node_modules').filter(f => !f.startsWith('.'));
+                appendToConsole("Installed: " + (modules.length ? modules.join(', ') : 'none'));
+            }
+        } 
+        else if (command === 'ls') {
+            const path = args[0] || '/';
+            const files = vfs.readdirSync(path);
+            appendToConsole(files.join('  '));
+        } 
+        else if (command === 'clear') {
+            consoleOutput.innerHTML = '';
+        } 
+        else if (command === 'vite' || command === 'start') {
+            window.startViteServer();
+        }
+        else {
+            appendToConsole(`Command not found: ${command}`, "red");
+        }
+    } catch (err) {
+        appendToConsole("Error: " + err.message, "#ff5555");
+    }
+}
+
+// Attach listener to the input field
+if (termInput) {
+    termInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            runCommand(termInput.value);
+            termInput.value = '';
+        }
+    });
+}
+
+/**
+ * 4. VITE DEV SERVER & TEMPLATE LOGIC
  */
 window.startViteServer = async () => {
     appendToConsole("Starting dev server...", "#0af");
     try {
-        // Ensure Vite is installed
         if (!vfs.existsSync('/node_modules/vite')) {
             appendToConsole("Vite not found. Running installation...", "yellow");
             await window.importStarterTemplate();
         }
 
-        appendToConsole("Initializing runtime...", "#888");
-        
-        // Spawn Vite on the virtual 3000 port
         const vite = await container.spawn('npx', ['vite', '--host', '--port', '3000']);
-
         vite.stdout.on('data', (data) => {
             appendToConsole(data);
-            
-            // When Vite is ready, point the iframe to the virtual bridge
             if (data.includes('Local:')) {
                 const virtualUrl = `${window.location.origin}/__virtual__/3000/`;
                 const frame = document.getElementById('preview-frame');
-                
                 frame.src = virtualUrl;
                 frame.style.display = 'block';
-                
-                appendToConsole("Preview started at " + virtualUrl, "#0f0");
-                appendToConsole("HMR target connected", "#888");
+                appendToConsole("Preview started", "#0f0");
             }
         });
     } catch (e) { appendToConsole("Vite Error: " + e.message, 'red'); }
@@ -102,28 +156,23 @@ window.importStarterTemplate = async () => {
     }
 
     renderSidebar();
-    appendToConsole("=== Installing Vite ===", "yellow");
-    await container.npm.install(); // Reads from package.json
-    appendToConsole("Vite installation complete!", "#0f0");
+    appendToConsole("=== Installing Dependencies ===", "yellow");
+    await container.npm.install();
+    appendToConsole("Ready!", "#0f0");
 };
 
 /**
- * 4. EDITOR & VFS SYNC
+ * 5. EDITOR & BOOTSTRAP
  */
 async function openFile(fullPath) {
     if (!isEditorReady) return;
     currentFile = fullPath;
     const content = vfs.readFileSync(fullPath, 'utf8');
     editor.setValue(content);
-    
-    // UI Update
     document.querySelectorAll('.file-item').forEach(el => el.classList.remove('active-file'));
     renderSidebar();
 }
 
-/**
- * 5. BOOTSTRAP
- */
 (async () => {
     if (window.editorInitialized) return;
     window.editorInitialized = true;
@@ -137,21 +186,13 @@ async function openFile(fullPath) {
         editor.onDidChangeModelContent(async () => {
             if (currentFile) {
                 const code = editor.getValue();
-                
-                // Write to Virtual FS (Triggers Vite HMR)
                 vfs.writeFileSync(currentFile, code);
-                
-                // Persist to IndexedDB
                 const db = await dbPromise;
                 await db.put('files', code, currentFile);
-                
-                console.log(`Saved: ${currentFile}`);
             }
         });
 
         isEditorReady = true;
-
-        // Restore files from IndexedDB
         const db = await dbPromise;
         const keys = await db.getAllKeys('files');
         for (const k of keys) {
@@ -170,7 +211,6 @@ async function openFile(fullPath) {
     });
 })();
 
-// Re-expose global functions for UI buttons
 window.openFile = openFile;
 window.renderSidebar = renderSidebar;
 
@@ -202,6 +242,7 @@ function buildTree(path, parentElement) {
 
 function renderSidebar() {
     const list = document.getElementById('file-list');
+    if (!list) return;
     list.innerHTML = '';
     buildTree('/', list);
 }
